@@ -238,18 +238,18 @@ class UnorientedGraph : public Graph{
 
 public:
     UnorientedGraph(int n = 1, int m = 0) : Graph(n, m) {};
-    UnorientedGraph(int n, int m, vector<pair<int, int> > v);
-    UnorientedGraph& operator+=(const pair<int, int> edge);
-    istream& read(istream& in) override;
-    void read_from_file(string filename);
+    UnorientedGraph(int , int , vector<pair<int, int> > );
+    UnorientedGraph& operator+=(const pair<int, int>);
+    istream& read(istream&) override;
+    void read_from_file(string);
     void print_bridges() const;
     void biconex() const;
-    bool havel_hakimi(const vector<int> v);
+    bool havel_hakimi(const vector<int>);
 
 private:
-    void h_merge(vector<pair<int, int> > &d, const int k) const;
-    void do_dfs_with_bridges(const int start, int &time, vector<bool> &viz, vector<int> &disc, vector<int> &low, vector<int> &parent) const;
-    void do_biconex(const int son, const int dad, vector<bool> &viz, vector<int> &disc, vector<int> &low, stack<int> &s, string &response, int &ct) const;
+    void h_merge(vector<pair<int, int> > &, const int) const;
+    void do_dfs_with_bridges(const int, int &, vector<bool> &, vector<int> &, vector<int> &, vector<int> &) const;
+    void do_biconex(const int, const int, vector<bool> &, vector<int> &, vector<int> &, stack<int> &, string &, int &) const;
 };
 
 
@@ -491,16 +491,16 @@ class OrientedGraph : public Graph{
 
 public:
     OrientedGraph(int n = 1, int m = 0) : Graph(n, m) {};
-    OrientedGraph(int n, int m, vector<pair<int, int> > v);
-    OrientedGraph& operator+=(const pair<int, int> edge);
-    istream& read(istream& in) override;
+    OrientedGraph(int, int, vector<pair<int, int> >);
+    OrientedGraph& operator+=(const pair<int, int>);
+    istream& read(istream&) override;
     void topological_sort() const;
-    void read_from_file(string filename);
+    void read_from_file(string);
     OrientedGraph transpose_graph() const;
     void ctc() const;
 
 private:
-     inline void do_dfs(const int start, vector<bool> &viz, stack<int> &S) const;
+     inline void do_dfs(const int, vector<bool> &, stack<int> &) const;
 
 };
 
