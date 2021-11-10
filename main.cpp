@@ -19,6 +19,9 @@ protected:
     void do_dfs(const int start, vector<bool> &viz, const bool print) const;
     void do_bfs(const int start, vector<int> &dist, const bool print) const;
 
+    virtual istream& read(istream&);
+    virtual ostream& print(ostream&) const;
+
 public:
     Graph(int n = 1, int m = 0);
     Graph(const Graph &);
@@ -29,9 +32,6 @@ public:
 
     friend istream& operator>>(istream&, Graph&);
     friend ostream& operator<<(ostream&, const Graph&);
-
-    virtual ostream& print(ostream&) const;
-    virtual istream& read(istream&);
     virtual void read_from_file(string) = 0;
 
     void dfs(const int) const;
@@ -95,7 +95,7 @@ istream& operator>>(istream& in, Graph& g){
     return in;
 }
 
-ostream& operator<<(ostream& out, Graph& g){
+ostream& operator<<(ostream& out, const Graph& g){
     g.print(out);
     return out;
 }
@@ -238,18 +238,18 @@ class UnorientedGraph : public Graph{
 
 public:
     UnorientedGraph(int n = 1, int m = 0) : Graph(n, m) {};
-    UnorientedGraph(int , int , vector<pair<int, int> > );
-    UnorientedGraph& operator+=(const pair<int, int>);
-    istream& read(istream&) override;
-    void read_from_file(string);
+    UnorientedGraph(int n, int m, vector<pair<int, int> > v);
+    UnorientedGraph& operator+=(const pair<int, int> edge);
+    istream& read(istream& in) override;
+    void read_from_file(string filename);
     void print_bridges() const;
     void biconex() const;
-    bool havel_hakimi(const vector<int>);
+    bool havel_hakimi(const vector<int> v);
 
 private:
-    void h_merge(vector<pair<int, int> > &, const int) const;
-    void do_dfs_with_bridges(const int, int &, vector<bool> &, vector<int> &, vector<int> &, vector<int> &) const;
-    void do_biconex(const int, const int, vector<bool> &, vector<int> &, vector<int> &, stack<int> &, string &, int &) const;
+    void h_merge(vector<pair<int, int> > &d, const int k) const;
+    void do_dfs_with_bridges(const int start, int &time, vector<bool> &viz, vector<int> &disc, vector<int> &low, vector<int> &parent) const;
+    void do_biconex(const int son, const int dad, vector<bool> &viz, vector<int> &disc, vector<int> &low, stack<int> &s, string &response, int &ct) const;
 };
 
 
@@ -491,16 +491,16 @@ class OrientedGraph : public Graph{
 
 public:
     OrientedGraph(int n = 1, int m = 0) : Graph(n, m) {};
-    OrientedGraph(int, int, vector<pair<int, int> >);
-    OrientedGraph& operator+=(const pair<int, int>);
-    istream& read(istream&) override;
+    OrientedGraph(int n, int m, vector<pair<int, int> > v);
+    OrientedGraph& operator+=(const pair<int, int> edge);
+    istream& read(istream& in) override;
     void topological_sort() const;
-    void read_from_file(string);
+    void read_from_file(string filename);
     OrientedGraph transpose_graph() const;
     void ctc() const;
 
 private:
-     inline void do_dfs(const int, vector<bool> &, stack<int> &) const;
+     inline void do_dfs(const int start, vector<bool> &viz, stack<int> &S) const;
 
 };
 
@@ -684,7 +684,7 @@ void OrientedGraph :: ctc() const {
     g.topological_sort();
 }*/
 
-/*void Solve(){
+void Solve(){
     /// Havel Hakimi problem
 
     int n;
@@ -704,7 +704,7 @@ void OrientedGraph :: ctc() const {
     cout << r << "\n";
     if(r)
         cout << g;
-}*/
+}
 
 /*void Solve(){
     UnorientedGraph g;
@@ -714,14 +714,14 @@ void OrientedGraph :: ctc() const {
 
 }*/
 
-void Solve(){
+/*void Solve(){
     /// find all biconnected components
 
     UnorientedGraph g;
 
     g.read_from_file("biconex.in");
     g.biconex();
-}
+}*/
 
 int main()
 {
