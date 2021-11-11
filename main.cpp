@@ -357,10 +357,10 @@ void UnorientedGraph :: h_merge (vector<pair<int, int> > &d, const int k) const 
     /// sorted - merges first k elements with last n - k
 
     int i = 0;
-    unsigned int j = k + 1;
+    unsigned int j = k;
     vector<pair<int, int> > temp;
 
-    while(i <= k && j < d.size())
+    while(i < k && j < d.size())
         if(d[i]. first > d[j]. first){
             temp.push_back(d[i]);
             i++;
@@ -415,9 +415,9 @@ bool UnorientedGraph :: havel_hakimi(vector<int> v){
             if(d[i].first < 0) return 0;
             temp += make_pair(d[0].second, d[i].second);
         }
+
         d.erase(d.begin());
         h_merge(d, k);
-
     }
 
 }
