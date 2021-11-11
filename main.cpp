@@ -8,7 +8,7 @@
 #include <set>
 using namespace std;
 
-ofstream fout("file.out");
+ofstream fout("biconex.out");
 
 class Graph{
 
@@ -240,6 +240,7 @@ public:
     UnorientedGraph(int n = 1, int m = 0) : Graph(n, m) {};
     UnorientedGraph(int n, int m, vector<pair<int, int> > v);
     UnorientedGraph& operator+=(const pair<int, int> edge);
+
     istream& read(istream& in) override;
     void read_from_file(string filename);
     void print_bridges() const;
@@ -437,7 +438,7 @@ void UnorientedGraph :: do_biconex(const int son, const int dad, vector<bool> &v
 
     for(auto node : l[son])
         if(node != dad){
-            if(!viz[node]){ ///back-edge
+            if(!viz[node]){
                 s.push(node);
                 do_biconex(node, son, viz, disc, low, s, response, ct);
 
@@ -458,7 +459,7 @@ void UnorientedGraph :: do_biconex(const int son, const int dad, vector<bool> &v
                     response += "\n";
                 }
             }
-            else
+            else /// back-edge
                 if(disc[node] < low[son])
                     low[son] = disc[node];
         }
