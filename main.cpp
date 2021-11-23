@@ -6,6 +6,7 @@
 #include <list>
 #include <algorithm>
 #include <set>
+#include <tuple>
 using namespace std;
 
 ofstream fout("biconex.out");
@@ -22,7 +23,11 @@ protected:
     virtual istream& read(istream&);
     virtual ostream& print(ostream&) const;
 
+    static int findx (int, vector<int> &);
+    static void unionx(const int, const int, vector<int> &, vector<int> &);
+
 public:
+    Graph(int n, bool dummy) : n(n) {} /// used to construct graph_with_costs
     Graph(int n = 1, int m = 0);
     Graph(const Graph &);
     Graph& operator= (const Graph &);
@@ -37,7 +42,8 @@ public:
     void dfs(const int) const;
     int num_of_components() const;
     void bfs(const int) const;
-    void dist_from_node(const int) const;
+    vector<int> dist_from_node(const int) const;
+    static void disjoint(const string, const string);
 
     virtual ~Graph() = 0;
 };
@@ -59,8 +65,7 @@ Graph :: Graph (const Graph &g) : l(g.n) {
     this->n = g.n;
     this->m = g.m;
 
-    for(int i = 0; i < g.n; ++i)
-        l.push_back(g.l[i]);
+    this->l = g.l;
 }
 
 
@@ -82,9 +87,7 @@ Graph& Graph :: operator= (const Graph &g){
 
         if(!this->l.empty())
             l.clear();
-
-        for(int i = 0; i <= g.n; ++i)
-            l.push_back(g.l[i]);
+        l = g.l;
      }
 
      return *this;
@@ -218,18 +221,88 @@ void Graph :: bfs(const int start) const {
     do_bfs(start, dist, 1);
 }
 
-void Graph :: dist_from_node (const int start) const {
+vector<int> Graph :: dist_from_node (const int start) const {
     /// this function calculates the distance between
     /// the start node and every other node in the graph
     /// if the node is unreachable -> the distance is -1
 
-    vector<int>dist(n + 1, 0);
+    vector<int> dist(n + 1, 0);
     do_bfs(start, dist);
 
-    for(int i = 1; i <= n; i ++)
-        fout << dist[i] - 1<<" ";
+    return dist;
 }
 
+int Graph :: findx (int x, vector<int> &sets){
+    /// method that returns the set that includes x
+
+    int root = x;
+    while(sets[root] != root)  /// go up on the tree that represents the set
+        root = sets[root];
+
+    while(sets[x] != root){
+        int temp;
+        temp = sets[x];
+        sets[x] = root;
+        x = temp;
+    }
+
+    return root;
+}
+
+void Graph :: unionx(const int x, const int y, vector<int> &sets, vector<int> &card){
+    /// method that unifies 2 disjoint sets
+
+    int root_x = findx(x, sets);
+    int root_y = findx(y, sets); /// find the root of each disjoint set
+
+    /// we will append the smallest set to the bigger set
+    if(card[root_x] >= card[root_y]){
+        card[root_x] += card[root_y];  /// update the size of the bigger set
+        sets[root_y] = root_x;        /// now root_y is child of root_x
+    }
+    else{
+        card[root_y] += card[root_x];
+        sets[root_x] = root_y;
+    }
+}
+
+void Graph :: disjoint(const string input_file, const string output_file){
+    /// method that reads n operations from a file and prints the output to other file
+    /// the operations can be 1 -> unify two disjoint sets
+    ///                       2 -> verify if two elements are in the same set
+
+    ifstream fin(input_file);
+    ofstream fout(output_file);
+    int n, m;
+
+    fin >> n >> m;
+
+    vector<int> sets(n + 1, 0), card(n + 1, 1);  /// sets -> vector of sets, card[i] = cardinal of set i
+
+    for(int i = 1; i <= n; ++i) /// we begin with n sets with 1 element
+        sets[i] = i;
+
+    card[0] = 0;
+
+    for(int i = 1; i <= m; ++i){
+        int x, y, op;
+        fin >> op >> x >> y;
+
+         if(op == 1){
+            if(findx(x, sets) != findx(y, sets))
+                unionx(x, y, sets, card);   /// unify the 2 disjointed sets
+        }
+        else{
+            if(findx(x, sets) == findx(y, sets))  /// if x and y are from same set print yes
+                fout << "DA\n";
+            else fout << "NU\n";
+        }
+    }
+
+    fin.close();
+    fout.close();
+
+}
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -241,16 +314,16 @@ public:
     UnorientedGraph(int n, int m, vector<pair<int, int> > v);
     UnorientedGraph& operator+=(const pair<int, int> edge);
 
-    istream& read(istream& in) override;
     void read_from_file(string filename);
-    void print_bridges() const;
-    void biconex() const;
+    vector<pair<int, int> > bridges() const;
+    vector<vector<int> > biconex() const;
     bool havel_hakimi(const vector<int> v);
 
 private:
-    void h_merge(vector<pair<int, int> > &d, const int k) const;
-    void do_dfs_with_bridges(const int start, int &time, vector<bool> &viz, vector<int> &disc, vector<int> &low, vector<int> &parent) const;
-    void do_biconex(const int son, const int dad, vector<bool> &viz, vector<int> &disc, vector<int> &low, stack<int> &s, string &response, int &ct) const;
+    void h_merge(vector<pair<int, int> > &, const int ) const;
+    void do_dfs_with_bridges(const int, int &, vector<bool> &, vector<int> &, vector<int> &, vector<int> &, vector<pair<int, int> > &) const;
+    void do_biconex(const int, const int, vector<bool> &, vector<int> &, vector<int> &, stack<int> &, vector<vector<int> > &) const;
+    istream& read(istream& in) override;
 };
 
 
@@ -290,7 +363,7 @@ void UnorientedGraph :: read_from_file(string filename){
 
     input >> n >> m;
 
-    UnorientedGraph g(n, m);
+    UnorientedGraph g(n, 0);
     for(int i = 1; i <= m; i ++){
         int x, y;
         input >> x >> y;
@@ -312,7 +385,7 @@ UnorientedGraph& UnorientedGraph :: operator+=(const pair<int, int> edge){
 }
 
 /// methods
-void UnorientedGraph :: do_dfs_with_bridges(const int start, int &time, vector<bool> &viz, vector<int> &disc, vector<int> &low, vector<int> &parent) const {
+void UnorientedGraph :: do_dfs_with_bridges(const int start, int &time, vector<bool> &viz, vector<int> &disc, vector<int> &low, vector<int> &parent, vector<pair<int, int> >& bridges) const {
     /// DFS that prints bridges
     /// used by print_bridges
     /// disc[i] = discovery time of node i
@@ -325,11 +398,11 @@ void UnorientedGraph :: do_dfs_with_bridges(const int start, int &time, vector<b
     for(auto node : l[start]){
         if(!viz[node]){
             parent[node] = start;
-            do_dfs_with_bridges(node, time, viz, disc, low, parent);
+            do_dfs_with_bridges(node, time, viz, disc, low, parent, bridges);
 
             low[start] = min(low[start], low[node]);
             if (low[node] > disc[start])
-                cout << start <<" " << node << endl;
+               bridges.push_back(make_pair(start, node));
         }
         else if(node != parent[start])  /// back-edge
             low[start]  = min(low[start], disc[node]);
@@ -337,19 +410,21 @@ void UnorientedGraph :: do_dfs_with_bridges(const int start, int &time, vector<b
 
 }
 
-void UnorientedGraph :: print_bridges() const {
+vector<pair<int, int> > UnorientedGraph :: bridges() const {
     /// Method that prints all bridges in a graph
 
     vector<bool> viz(n + 1, 0);
     vector<int> disc(n + 1);
     vector<int> low(n + 1);
     vector<int> parent(n + 1, -1);
+    vector<pair<int, int> > bridges;
 
     int time = 0;
 
     for(int i = 1; i <= n; i++)
         if (!viz[i])
-            do_dfs_with_bridges(i, time, viz, disc, low, parent);
+            do_dfs_with_bridges(i, time, viz, disc, low, parent, bridges);
+    return bridges;
 }
 
 void UnorientedGraph :: h_merge (vector<pair<int, int> > &d, const int k) const {
@@ -422,7 +497,7 @@ bool UnorientedGraph :: havel_hakimi(vector<int> v){
 
 }
 
-void UnorientedGraph :: do_biconex(const int son, const int dad, vector<bool> &viz, vector<int> &disc, vector<int> &low, stack<int> &s, string &response, int &ct) const {
+void UnorientedGraph :: do_biconex(const int son, const int dad, vector<bool> &viz, vector<int> &disc, vector<int> &low, stack<int> &s, vector<vector<int> > &comp) const {
 
     /// Utility function used by biconex
     /// viz[i] = 1 if i was visited
@@ -440,23 +515,23 @@ void UnorientedGraph :: do_biconex(const int son, const int dad, vector<bool> &v
         if(node != dad){
             if(!viz[node]){
                 s.push(node);
-                do_biconex(node, son, viz, disc, low, s, response, ct);
+                do_biconex(node, son, viz, disc, low, s, comp);
 
                 low[son] = min(low[son], low[node]);
 
                 if(disc[son] <= low[node]){
-                    ct++;
                     s.push(son);
 
+                    vector<int> temp;
                     while(!s.empty() && s.top() != node){
-                        response += (to_string(s.top()) + " ");
+                        temp.push_back(s.top());
                         s.pop();
                     }
                     if(!s.empty()){
-                        response += (to_string(s.top()) + " ");
+                        temp.push_back(s.top());
                         s.pop();
                     }
-                    response += "\n";
+                    comp.push_back(temp);
                 }
             }
             else /// back-edge
@@ -465,7 +540,7 @@ void UnorientedGraph :: do_biconex(const int son, const int dad, vector<bool> &v
         }
 }
 
-void UnorientedGraph :: biconex() const {
+vector<vector<int> > UnorientedGraph :: biconex() const {
 
     /// Method that prints out the number of biconnected components
     /// and the biconnected components
@@ -474,14 +549,13 @@ void UnorientedGraph :: biconex() const {
     vector<int> disc(n + 1, -1);
     vector<int> low(n + 1, -1);
     vector<bool> viz(n + 1, 0);
-    string response = "";
-    int ct = 0;
+    vector<vector<int> > comp;
+
 
     disc[1] = 1;
-    do_biconex(2, 1, viz, disc, low, s, response, ct);
+    do_biconex(2, 1, viz, disc, low, s, comp);
 
-    fout<<ct<<"\n";
-    fout<<response;
+    return comp;
 }
 
 
@@ -494,14 +568,14 @@ public:
     OrientedGraph(int n = 1, int m = 0) : Graph(n, m) {};
     OrientedGraph(int n, int m, vector<pair<int, int> > v);
     OrientedGraph& operator+=(const pair<int, int> edge);
-    istream& read(istream& in) override;
-    void topological_sort() const;
+    vector<int> topological_sort() const;
     void read_from_file(string filename);
     OrientedGraph transpose_graph() const;
-    void ctc() const;
+    vector<vector<int> > ctc() const;
 
 private:
      inline void do_dfs(const int start, vector<bool> &viz, stack<int> &S) const;
+     istream& read(istream& in) override;
 
 };
 
@@ -537,7 +611,7 @@ void OrientedGraph :: read_from_file(string filename){
 
     input >> n >> m;
 
-    OrientedGraph g(n, m);
+    OrientedGraph g(n, 0);
     for(int i = 1; i <= m; i ++){
         int x, y;
         input >> x >> y;
@@ -571,21 +645,24 @@ void OrientedGraph :: do_dfs(const int start, vector<bool> &viz, stack<int> &S) 
     S.push(start);
 }
 
-void OrientedGraph :: topological_sort() const {
+vector<int> OrientedGraph :: topological_sort() const {
 
     /// Method that prints out the nodes in topological order
 
     vector<bool> viz(n + 1, 0);
     stack<int> S;
+    vector<int> order;
 
     for(int i = 1; i <= n; ++ i)
         if(!viz[i])
             do_dfs(i, viz, S);
 
     while(!S.empty()){
-        fout << S.top() << " "; /// de schimbat in cout cand pun pe github
+        order.push_back(S.top()); /// de schimbat in cout cand pun pe github
         S.pop();
     }
+
+    return order;
 }
 
 OrientedGraph OrientedGraph :: transpose_graph() const {
@@ -602,7 +679,7 @@ OrientedGraph OrientedGraph :: transpose_graph() const {
     return gt;
 }
 
-void OrientedGraph :: ctc() const {
+vector<vector<int> > OrientedGraph :: ctc() const {
 
     /// method that prints out the number of strongly connected components
     /// and the strongly connected components of a graph
@@ -610,17 +687,18 @@ void OrientedGraph :: ctc() const {
     OrientedGraph gt = transpose_graph();
     vector<bool> viz(n + 1, 0);
     stack<int> S;
-    int ct = 0;
-    int current_node;
-    string response = "";
+    vector<vector<int> > sol;
 
     for(int i = 1; i <= n; ++ i)
         if(!viz[i]) do_dfs(i, viz, S);
 
     fill(viz.begin(), viz.end(), 0); /// reinitialize viz
 
+    int ct = 0;
+    string response = "";
+
     while(!S.empty()){
-        current_node = S.top();
+        int current_node = S.top();
         S.pop();
         if(!viz[current_node]){
             stack<int> component;
@@ -628,107 +706,295 @@ void OrientedGraph :: ctc() const {
             ct ++;
             gt.do_dfs(current_node, viz, component);
 
+            vector<int> temp;
             while(!component.empty()){
-                response += (to_string(component.top()) + " ");
+                temp.push_back(component.top());
                 component.pop();
             }
-            response += "\n";
+            sol.push_back(temp);
         }
     }
 
-    fout << ct << "\n";
-    fout << response;
+    return sol;
 
 }
 
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+class GraphWithCosts : public Graph {
 
-/*void Solve(){
-    /// number of components in a graph
+    vector<vector<pair<int,int> > > l; /// same list of adjacency as in Graph but with costs
+    bool isOriented;
 
-    UnorientedGraph g;
+private:
+    //vector<Edge> edges; /// list of edges
 
-    g.read_from_file("dfs.in");
-    g.num_of_components();
+public:
+    GraphWithCosts(int n = 1, int m = 0, bool o = 0);
+    GraphWithCosts(const GraphWithCosts &);
+    GraphWithCosts& operator+=(const tuple<int, int, int>&);
+    GraphWithCosts& operator= (const GraphWithCosts &);
+    void read_from_file(string);
+    vector<int> dijkstra(const int) const;
+    vector<int> bellman_ford(const int) const;
+    void kruskal(const string) const;
 
-}*/
 
+private:
+    istream& read(istream&) override;
+    virtual ostream& print(ostream&) const override;
+    vector<tuple<int, int, int> > get_list_of_edges() const;
 
-/*void Solve() {
-    /// distance to all reachable nodes
+};
 
-    int n, m, start;
-    ifstream fin("bfs.in")
+GraphWithCosts :: GraphWithCosts(int n, int m, bool o) : Graph(n, 0), l(n + 1) {
+    Graph::m = m;
+    isOriented = o;
+};
 
-    fin >> n >> m >> start;
-    OrientedGraph g(n, m);
-
-    for(int i = 1; i <= m; i ++){
-        int x, y;
-        fin >> x >> y;
-        g += make_pair(x, y);
-    }
-
-    fin.close();
-
-    g.dist_from_node(start);
-}*/
-
-/*void Solve() {
-    /// print nodes in topological order
-
-    OrientedGraph g;
-
-    g.read_from_file("topsort.in");
-    g.topological_sort();
-}*/
-
-void Solve(){
-    /// Havel Hakimi problem
-
-    int n;
-    vector<int> d;
-
-    cin >> n;
-
-    for(int i = 1; i <= n; i ++){
-        int x;
-        cin >> x;
-        d.push_back(x);
-    }
-
-    UnorientedGraph g;
-    bool r = g.havel_hakimi(d);
-
-    cout << r << "\n";
-    if(r)
-        cout << g;
+GraphWithCosts :: GraphWithCosts(const GraphWithCosts &g) {
+    /// copy constructor
+    this->n = g.n;
+    this->m = g.m;
+    this->isOriented = g.isOriented;
+    l = g.l;
+    //edges = g.edges;
 }
 
-/*void Solve(){
-    UnorientedGraph g;
 
-    g.read_from_file("bridges");
-    g.print_bridges;
+/// Operators
+GraphWithCosts& GraphWithCosts :: operator= (const GraphWithCosts &g) {
+    if(this != &g){
+        this->n = g.n;
+        this->m = g.m;
+        this-> isOriented = g.isOriented;
 
-}*/
+        if(!this->l.empty())
+            l.clear();
+        l = g.l;
 
-/*void Solve(){
-    /// find all biconnected components
+        //if(!this->edges.empty())
+          //  edges.clear();
+        //edges = g.edges;
+     }
 
-    UnorientedGraph g;
+     return *this;
+}
 
-    g.read_from_file("biconex.in");
-    g.biconex();
-}*/
+GraphWithCosts& GraphWithCosts :: operator+=(const tuple<int, int, int> &e) {
+    /// add edge to graph
+
+    m++;
+    l[get<0>(e)].push_back(make_pair(get<1>(e), get<2>(e)));
+    if(!isOriented)
+        l[get<1>(e)].push_back(make_pair(get<0>(e), get<2>(e)));
+
+    //edges.push_back(e); ///trebuie sa ma uit sa vad daca trebuie pusa si invers!!!!
+
+    return *this;
+}
+
+
+/// read method
+istream& GraphWithCosts :: read(istream& in) {
+    Graph::read(in); /// call read from base
+    GraphWithCosts temp(n, m, this->isOriented);
+
+    for(int i = 1; i <= m; i ++){
+        int x, y, c;
+        cin >> x >> y >> c;
+
+        temp.l[x].push_back(make_pair(y, c));
+        if(!this->isOriented)
+            temp.l[y].push_back(make_pair(x, c));
+    }
+
+    operator=(temp);
+    return in;
+}
+
+void GraphWithCosts :: read_from_file(string filename) {
+    /// Method to read a graph from a file filename
+
+    int n, m;
+
+    ifstream input;
+    input.open(filename);
+
+    input >> n >> m;
+
+    GraphWithCosts g(n, 0, this->isOriented);
+    for(int i = 1; i <= m; i ++){
+        tuple<int, int, int> e;
+        input >> get<0>(e) >> get<1>(e) >> get<2>(e);
+        g += e;
+        }
+
+    *this = g;
+    input.close();
+
+}
+
+
+/// methods
+ostream& GraphWithCosts :: print(ostream& out) const {
+    /// the default format is n m on one line followed
+    /// by the number of the current node and a list of every
+    /// reachable nodes
+
+    cout << n << " " << m << "\n";
+
+    for(int i = 1; i <= n; ++i){
+        cout << i << ": ";
+            for(auto node : l[i])
+                cout << "(" << node.first << ", " << node.second << ") ";
+        cout << "\n";
+    }
+
+    return out;
+};
+
+vector<int> GraphWithCosts :: dijkstra(const int s) const {
+    /// method to find Dijkstra's shortest path using
+    /// in the priority queue we store elements of pair
+    /// first -> cost from the start node to the current node
+    /// second -> node
+
+    const int INF = 0x3f3f3f3f;
+    priority_queue< pair<int, int>, vector <pair<int, int> > , greater<pair<int, int> > > pq;
+    vector<int> dist(n + 1, INF);
+    vector<bool>inHeap(n + 1, false);
+
+
+    pq.push(make_pair(0, s));  /// the cost to reach start node is always 0
+    dist[s] = 0;
+
+    while (!pq.empty()){
+        int node = pq.top().second;  /// node is the current node
+        pq.pop();
+
+        if (!inHeap[node]) {
+            inHeap[node] = true;
+            for(auto v : l[node])                             ///  iterate through all vertexes reachable from node
+                if (dist[v.first] > dist[node] + v.second){   ///  if there is shorted path to v through node
+                    dist[v.first] = dist[node] + v.second;    ///  update distance
+                    pq.push(make_pair(dist[v.first], v.first));
+            }
+        }
+    }
+
+    return dist;
+}
+
+vector<int> GraphWithCosts :: bellman_ford(const int s) const {
+    /// method to find shortest path using Bellman Ford algorithm
+    /// optimization with a queue
+    /// complexity N * M
+
+    const int INF = 0x3f3f3f3f;
+    bool noCycle = 1;                /// noCycle = 1 -> no negative costs cycles
+    vector<int> dist(n + 1, INF);
+    vector<bool> inQ(n + 1, false);
+    vector<int> viz(n + 1, 0);      /// viz[i] = number of times node i was visited if > n => noCycle = 0
+    queue<int> q;                   /// this queue is used to store nodes that could still make the cost smaller
+
+    q.push(s);                      /// we begin only with the start node with cost 0
+    dist[s] = 0;
+    inQ[s] = 1;
+
+    while(!q.empty() && noCycle){
+        int node = q.front();      /// current node is q.front()
+        q.pop();
+        inQ[node] = 0;
+
+        for(auto v : l[node])     /// iterate through all reachable vertexes
+            if(dist[v.first] > dist[node] + v.second){   /// if we get a better cost
+                dist[v.first] = dist[node] + v.second;   /// relax the edge
+                viz[v.first] ++;
+
+                if(!inQ[v.first]){       /// if we used the node we put it in the queue
+                    q.push(v.first);
+                    inQ[v.first] = 1;
+                }
+
+                if(viz[v.first] >= n)   /// test if we have a negative cycle
+                    noCycle = 0;
+
+            }
+    }
+
+    if(noCycle) return dist;
+
+    vector<int> dummy;
+    return dummy;    /// if there is a negative cycle we will return an empty list
+
+}
+
+vector<tuple<int, int, int> > GraphWithCosts :: get_list_of_edges() const {
+
+    vector<tuple<int, int, int> > edges;
+
+    for(int i = 1; i <= n; i ++)
+        for(auto elem : l[i])
+        if(isOriented == 1 || (!isOriented && i < elem.first)){
+            tuple<int, int, int> e;
+            get<0>(e) = elem.second;     /// put the cost first so we can sort by cost
+            get<1>(e) = i;
+            get<2>(e) = elem.first;
+            edges.push_back(e);
+    }
+
+    return edges;
+
+}
+
+void GraphWithCosts :: kruskal (const string output_file) const {
+    /// prints the mst of the graph in the output file using kruskal algorithm
+
+    ofstream fout(output_file);
+
+    vector<tuple<int, int, int> > edges = get_list_of_edges();
+    vector<int> sets(n + 1, 0), card(n + 1, 1);       /// sets -> vector of disjointed sets, card[i] = size of set i
+    vector<int> sol;                                  /// to store the index of the edges used for mst
+    int cost = 0;                                     /// length and cost of solution
+
+    card[0] = 0;
+    for(int i = 1; i <= n; ++i)  /// at the start we did not choose any edge
+        sets[i] = i;             /// so each node is part of a disjointed set
+
+    sort(edges.begin(), edges.end());
+
+    //for(auto t : edges)
+      // cout<<get<0>(t)<<" "<<get<1>(t)<<" "<<get<2>(t)<<"\n";
+
+    for(int i = 0; i < m && (int)sol.size() < n - 1; ++i){
+        int x, y;
+
+        x = get<1>(edges[i]);
+        y = get<2>(edges[i]);
+
+        if( findx(x,sets) != findx(y, sets) ){ /// if the selected nodes are not in the same set make union on sets
+            unionx(x, y, sets, card);
+            cost += get<0>(edges[i]);         /// update the cost of the mst
+            sol.push_back(i);
+        }
+    }
+
+    fout << cost << "\n" << sol.size() << "\n";
+    for(int i = 0; i < (int)sol.size(); ++i){
+        int idx = sol[i];
+        fout << get<1>(edges[idx]) << " " << get<2>(edges[idx])<< "\n";
+    }
+
+    fout.close();
+}
+
 
 int main()
 {
-    Solve();
-    fout.close();
-
+    GraphWithCosts g;
+    g.read_from_file("apm.in");
+    g.kruskal("apm.out");
     return 0;
 }
-
