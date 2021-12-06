@@ -7,9 +7,8 @@
 #include <algorithm>
 #include <set>
 #include <tuple>
+#include <map>
 using namespace std;
-
-ofstream fout("biconex.out");
 
 class Graph{
 
@@ -26,6 +25,9 @@ protected:
     static int findx (int, vector<int> &);
     static void unionx(const int, const int, vector<int> &, vector<int> &);
 
+    static bool find_augumentation_path(vector<vector<int> >&, vector<int>&, vector<int>&, vector<int>&);
+    static bool add_augumentation_path(int, vector<vector<int> >&, vector<int>&, vector<int>&, vector<int>&);
+
 public:
     Graph(int n, bool dummy) : n(n) {} /// used to construct graph_with_costs
     Graph(int n = 1, int m = 0);
@@ -34,6 +36,7 @@ public:
 
     int get_numEdges() const;
     int get_numNodes() const;
+    vector<vector<int> > get_adjacency_matrix() const;
 
     friend istream& operator>>(istream&, Graph&);
     friend ostream& operator<<(ostream&, const Graph&);
@@ -44,7 +47,8 @@ public:
     void bfs(const int) const;
     vector<int> dist_from_node(const int) const;
     static void disjoint(const string, const string);
-
+    vector<int> eulerian_cycle();
+    static void hopcroft_karp(const string, const string);
     virtual ~Graph() = 0;
 };
 
@@ -78,6 +82,13 @@ int Graph :: get_numNodes() const {
     return n;
 }
 
+vector<vector<int> > Graph :: get_adjacency_matrix() const {
+    vector<vector<int> > m(n + 1, vector<int>(n + 1, 0));
+    for(int i = 1; i <= n; i++)
+        for(auto node : l[i])
+            m[i][node];
+    return m;
+}
 
 /// operators
 Graph& Graph :: operator= (const Graph &g){
@@ -144,7 +155,7 @@ void Graph :: do_dfs(const int start, vector<bool> &viz, const bool print) const
     /// you visit them
 
     if(print)
-        fout << start << " ";
+        cout << start << " ";
 
     viz[start] = 1;
 
@@ -239,13 +250,6 @@ int Graph :: findx (int x, vector<int> &sets){
     while(sets[root] != root)  /// go up on the tree that represents the set
         root = sets[root];
 
-    while(sets[x] != root){
-        int temp;
-        temp = sets[x];
-        sets[x] = root;
-        x = temp;
-    }
-
     return root;
 }
 
@@ -304,7 +308,150 @@ void Graph :: disjoint(const string input_file, const string output_file){
 
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+vector<int> Graph :: eulerian_cycle(){
+    /// method that finds eulerian cycle in the given graph
+    /// this method returns the cycles as a vector or
+    /// a vector with one element (-1) is there is no such cycle
+
+    vector<int> deg(n + 1);             /// deg[i] = degree of node i
+    map <pair<int, int>, bool> h; /// h m
+
+    for(int i = 1; i <= n; ++i){
+        deg[i] += l[i].size();
+        if(deg[i] & 1)
+            return vector<int>(1, -1);  /// if the graph has eulerian cycle -> all degrees are even
+        for(auto node : l[i])
+            if(i <= node)
+                h.insert(make_pair(make_pair(i, node), 0));
+    }
+
+    stack<int> s;      /// the algorithm is recursive but we want an in place implementation so we use a stack
+    vector<int> res;   /// res -> result
+
+    s.push(1);         /// start the cycle from first node
+    while(!s.empty()){
+        int node = s.top();
+
+        if(l[node].empty()){
+            s.pop();
+            res.push_back(node);
+        }
+        else{
+            int next = l[node].back(); /// take the last edge in the list
+            l[node].pop_back();                     /// remove the edges
+
+            pair<int, int> edge = make_pair(node, next);
+
+            if(node >= next)
+                edge.first = next, edge.second = node;
+            cout<<edge.first<<"  "<<edge.second<<" "<<h[edge]<<"\n";
+            if(!h[edge]){
+                h[edge] = 1;
+                s.push(next);
+            }
+        }
+
+    }
+
+
+    for(auto nodes_list : l)
+        if(!nodes_list.empty())
+            return vector<int>(1, -1); /// if there are edges left in the graph -> we don t have eulerian cycle
+
+    return res;
+}
+
+void Graph :: hopcroft_karp(const string input, const string output){
+    /// method that reads a bipartite graph from input file and does hopcroft-karp algorithm
+    /// printing in the output file the maximum matching in the graph
+
+    ifstream fin(input);
+    ofstream fout(output);
+
+    int n, m, nre;            /// n -> number of nodes in left side / m -> for right side / nre -> number of edges
+    fin>>n>>m>>nre;
+
+    vector<vector<int> > l(n + 1);                              /// adjacency list for the bipartite graph
+    vector<int> left(n + 1, 0), right(m + 1, 0), dist(n + 1);  /// dist stores the distance of left side nodes -- sau m??
+    int cnt = 0;  /// number of nodes in the maximum matching
+
+    for(int i = 1; i <= nre; i ++){
+        int x, y;
+        fin>>x>>y;
+        l[x].push_back(y);  /// we only need to store the edge from left to right
+    }
+    fin.close();
+
+    while(find_augumentation_path(l, left, right, dist)){
+        for(int i = 1; i <= n; i++) /// find a free node
+            if(!left[i] && add_augumentation_path(i, l, left, right, dist))
+                cnt++;
+
+    }
+
+    fout<<cnt<<"\n";
+    for(int i = 1; i <= n; i ++)
+        if(left[i])
+            fout<<i<<" "<<left[i]<<"\n";
+
+    fout.close();
+
+
+}
+
+bool Graph :: find_augumentation_path(vector<vector<int> > &l, vector<int> &left, vector<int> &right, vector<int> &dist){
+
+    queue<int> q;
+    const int INF = 0x3f3f3f3f;
+    /// first layer of nodes with dist = 0
+    for(int i = 1; i < (int)left.size(); i++)
+        if(!left[i]){
+            /// node i is not matched
+            dist[i] = 0;
+            q.push(i);
+        }
+        else dist[i] = INF;
+
+    dist[0] = INF;
+
+    while(!q.empty()){
+        int node = q.front();
+        q.pop();
+
+        if(dist[node] < dist[0])
+            for(auto next : l[node])
+                if(dist[right[next]] == INF){
+                    dist[right[next]] = dist[node] + 1;
+                    q.push(right[next]);
+                }
+
+    }
+
+    return dist[0] != INF;
+}
+
+bool Graph :: add_augumentation_path(int start, vector<vector<int> > &l, vector<int> &left, vector<int> &right, vector<int> &dist){
+   const int INF = 0x3f3f3f3f;;
+    if(!start) return true;
+
+    for(auto i = l[start].begin(); i != l[start].end(); ++i){
+        int v = *i;
+        if(dist[right[v]] == dist[start]+1)
+            if(add_augumentation_path(right[v], l, left, right, dist)){
+                right[v] = start;
+                left[start] = v;
+                return 1;
+                }
+        }
+
+        dist[start] = INF;
+        return 0;
+
+}
+
+
+
+//------------------------------------------------------------------------------------------- ----------------------------------------------------------------------
 
 
 class UnorientedGraph : public Graph{
@@ -318,6 +465,8 @@ public:
     vector<pair<int, int> > bridges() const;
     vector<vector<int> > biconex() const;
     bool havel_hakimi(const vector<int> v);
+    int tree_diameter();
+    void euler_infoarena(string, string);
 
 private:
     void h_merge(vector<pair<int, int> > &, const int ) const;
@@ -383,6 +532,7 @@ UnorientedGraph& UnorientedGraph :: operator+=(const pair<int, int> edge){
     l[edge.second].push_back(edge.first);
     return *this;
 }
+
 
 /// methods
 void UnorientedGraph :: do_dfs_with_bridges(const int start, int &time, vector<bool> &viz, vector<int> &disc, vector<int> &low, vector<int> &parent, vector<pair<int, int> >& bridges) const {
@@ -558,6 +708,27 @@ vector<vector<int> > UnorientedGraph :: biconex() const {
     return comp;
 }
 
+int UnorientedGraph :: tree_diameter(){
+    int node = 1;
+    int maxi = 0;
+
+    vector<int> dist = dist_from_node(node);
+
+    for(int i = 1; i <= n; i ++)
+        if(dist[i] > maxi){
+            maxi = dist[i];
+            node = i;
+        }
+
+    dist = dist_from_node(node);
+
+     for(int i = 1; i <= n; i ++)
+        if(dist[i] > maxi)
+            maxi = dist[i];
+    return maxi;
+
+}
+
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -722,9 +893,11 @@ vector<vector<int> > OrientedGraph :: ctc() const {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+
 class GraphWithCosts : public Graph {
 
     vector<vector<pair<int,int> > > l; /// same list of adjacency as in Graph but with costs
+    vector<vector<int> > matrix;       /// matrix of adjacency that will be used only for roy_floyd
     bool isOriented;
 
 private:
@@ -739,6 +912,11 @@ public:
     vector<int> dijkstra(const int) const;
     vector<int> bellman_ford(const int) const;
     void kruskal(const string) const;
+
+    void generate_matrix();
+    void read_matrix_from_file(string);
+    void erase_matrix();
+    vector<vector<int> > roy_floyd();
 
 
 private:
@@ -773,10 +951,6 @@ GraphWithCosts& GraphWithCosts :: operator= (const GraphWithCosts &g) {
         if(!this->l.empty())
             l.clear();
         l = g.l;
-
-        //if(!this->edges.empty())
-          //  edges.clear();
-        //edges = g.edges;
      }
 
      return *this;
@@ -789,8 +963,6 @@ GraphWithCosts& GraphWithCosts :: operator+=(const tuple<int, int, int> &e) {
     l[get<0>(e)].push_back(make_pair(get<1>(e), get<2>(e)));
     if(!isOriented)
         l[get<1>(e)].push_back(make_pair(get<0>(e), get<2>(e)));
-
-    //edges.push_back(e); ///trebuie sa ma uit sa vad daca trebuie pusa si invers!!!!
 
     return *this;
 }
@@ -990,11 +1162,273 @@ void GraphWithCosts :: kruskal (const string output_file) const {
     fout.close();
 }
 
+void GraphWithCosts :: generate_matrix () {
+     matrix = vector<vector<int> >(n, vector<int>(n, 0));
+
+    for(int i = 1; i <= n; i++)
+        for(auto edge : l[i])
+        matrix[i - 1][edge.first - 1] = edge.second;
+
+
+}
+
+void GraphWithCosts :: read_matrix_from_file (string filename) {
+
+    ifstream input;
+    input.open(filename);
+
+    input>>n;
+    matrix = vector<vector<int> >(n, vector<int>(n, 0));
+
+    for(int i = 0; i < n; i++)
+        for(int j = 0; j < n; j++)
+            input>>matrix[i][j];
+
+
+}
+
+void GraphWithCosts :: erase_matrix () {
+    matrix.clear();
+    matrix.resize(0);
+}
+
+vector<vector<int> > GraphWithCosts :: roy_floyd () {
+        /// this method will perform the Roy Floyd algorithm for the
+        /// given graph. If the graph does not have a matrix of adjacency
+        /// this method will call generate_matrix
+
+        if(matrix.empty()) generate_matrix();
+
+        const int INF = 0x3f3f3f3f;
+        vector<vector<int> > dist(n, vector<int>(n, INF));
+
+        for(int i = 0; i < n; i++)
+            for(int j = 0; j < n; j++)
+                if(matrix[i][j])
+                    dist[i][j] = matrix[i][j];
+                else if(i == j)
+                    dist[i][j] = 0;
+
+        for (auto k = 0; k < n; k++) { /// Pick every pair of vertiges (i, j)
+            for (auto i = 0; i < n; i++) { /// try to improve the cost using node k
+                for (auto j = 0; j < n; j++){
+                    if (dist[i][j] > dist[i][k] + dist[k][j])
+                        dist[i][j] = dist[i][k] + dist[k][j];
+            }
+        }
+    }
+
+
+    return dist;
+}
+
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+struct Edge{
+    int cost, cap, used, dst;
+};
+
+class Network : public Graph{
+    vector<vector<Edge> > l;
+
+public:
+    Network(int n = 1, int m = 0) : Graph(n, 0), l(n + 1) {}
+    Network(const Network &);
+    Network& operator+=(const pair<int, Edge>&);
+    Network& operator= (const Network &);
+    void read_from_file(string);
+    int maxflow(int s, int d) const;
+
+private:
+    istream& read(istream&) override;
+    ostream& print(ostream&) const override;
+    bool bfs_with_flow(const int, const int, vector<int> &, vector<int> &, vector<vector<int> > &, vector<vector<int> > &, vector<vector<int> > &) const;
+
+};
+
+
+Network :: Network(const Network &g) {
+    /// copy constructor
+    this->n = g.n;
+    this->m = g.m;
+    l = g.l;
+}
+
+Network& Network :: operator= (const Network &g) {
+    if(this != &g){
+        this->n = g.n;
+        this->m = g.m;
+
+        if(!this->l.empty())
+            l.clear();
+        l = g.l;
+     }
+
+     return *this;
+}
+
+Network& Network :: operator+=(const pair<int, Edge> &e) {
+    /// add edge to graph
+
+    m++;
+    l[e.first].push_back(e.second);
+
+    return *this;
+}
+
+
+void Network :: read_from_file(string filename){
+    int n, m;
+
+    ifstream input;
+    input.open(filename);
+
+    input >> n >> m;
+
+    Network g(n, 0);
+    for(int i = 1; i <= m; i ++){
+        Edge e;
+        int src;
+        input >> src >> e.dst >> e.cap;
+        g += make_pair(src, e);
+        }
+
+    *this = g;
+    input.close();
+
+
+}
+
+istream& Network :: read(istream& in) {
+    Graph::read(in); /// call read from base
+    Network temp(n, m);
+
+    for(int i = 1; i <= m; i ++){
+        int src;
+        Edge e;
+        cin >> src >> e.dst >> e.cap;
+
+        temp.l[src].push_back(e);
+    }
+
+    operator=(temp);
+    return in;
+}
+
+
+/// methods
+ostream& Network :: print(ostream& out) const {
+    /// the default format is n m on one line followed
+    /// by the number of the current node and a list of every
+    /// reachable nodes
+
+    cout << n << " " << m << "\n";
+
+    for(int i = 1; i <= n; ++i){
+        cout << i << ": ";
+            for(auto node : l[i])
+                cout << "(" << node.dst << ", " << node.cap << ") ";
+        cout << "\n";
+    }
+
+    return out;
+};
+
+bool Network :: bfs_with_flow(const int s, const int d, vector<int>& parent, vector<int> &viz, vector<vector<int> > &res, vector<vector<int> > &capacity, vector<vector<int> > &flux) const{
+    /// this does bfs from s and stops when reaching node d
+    /// the function returns the flow of the path and
+    /// parent vector holds the bfs tree
+
+    //fill(parent.begin(), parent.end(), 0); /// reinitialize the parent vector
+    parent[s] = -1;
+    parent[d] = 0;
+
+    viz.clear();
+    viz.resize(n+1, 0);
+    viz[s] = 1;
+
+    queue<int> q;
+    q.push(s);
+
+    while(!q.empty() && !parent[d]){
+        int node = q.front();
+        q.pop();
+
+        for(int next : res[node])
+            if(!viz[next] && capacity[node][next] > flux[node][next]){ /// if the node is new and the edge is not saturated
+                parent[next] = node;
+                viz[next] = 1;
+                q.push(next);
+            }
+
+    }
+
+    return parent[d];
+}
+
+int Network :: maxflow(int s, int d) const{
+    /// this is an implementation of Edmonds Karp algorithm
+    /// to determine the max flow from s (source) to d (destination)
+    /// res - residual graph
+    /// capacity - matrix that stores the residual capacity of the network
+    /// flux - matrix that stores how much flow actually goes through an edge
+    /// parent - vector that stores bfs tree
+    /// https://cp-algorithms.com/graph/edmonds_karp.html?fbclid=IwAR2yev5zuz7lSFDE0H9uXDxSsEIc5nRIAQ7b8glHiAVCWUorK4mlfKhiyds
+
+    vector<vector<int> > res(n + 1);
+    vector<int> parent(n + 1, 0);
+    vector<vector<int> > capacity(n + 1, vector<int>(n + 1, 0));
+    vector<vector<int> > flux(n + 1, vector<int>(n + 1, 0));
+    vector<int> viz(n + 1, 0);
+
+    const int INF = 0x3f3f3f3f;
+    int flow = 0;
+    int new_flow;
+
+    /// initializing
+    for(int i = 1; i <= n; i++){
+        for(auto elem : l[i]){
+            int x = i;
+            int y = elem.dst;
+
+            capacity[x][y] =  elem.cap;
+            res[x].push_back(y);
+            res[y].push_back(x);
+        }
+    }
+
+    /// Edmonds-Karp
+    while(bfs_with_flow(s, d, parent, viz, res, capacity, flux))
+        for(auto node : res[d])
+            if(viz[node] && flux[node][d] != capacity[node][d]){
+                parent[d] = node;
+                new_flow = INF;
+                for(int i = d; i != s; i = parent[i]){
+                    int p = parent[i];
+                    if(capacity[p][i] - flux[p][i] < new_flow)
+                        new_flow = capacity[p][i] - flux[p][i];
+                }
+
+                if(new_flow){
+                    /// go up the bfs tree to update capacities
+                    for(int i = d; i != s; i = parent[i]){
+                        int p = parent[i];
+                        flux[p][i] += new_flow;
+                        flux[i][p] -= new_flow;
+                    }
+                }
+                flow += new_flow;
+            }
+
+
+    return flow;
+
+}
 
 int main()
 {
-    GraphWithCosts g;
-    g.read_from_file("apm.in");
-    g.kruskal("apm.out");
+    Graph::hopcroft_karp("cuplaj.in", "cuplaj.out");
     return 0;
 }
