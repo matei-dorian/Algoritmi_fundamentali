@@ -917,6 +917,7 @@ public:
     void read_matrix_from_file(string);
     void erase_matrix();
     vector<vector<int> > roy_floyd();
+    int hamiltonian_cycle();
 
 
 private:
@@ -1223,6 +1224,41 @@ vector<vector<int> > GraphWithCosts :: roy_floyd () {
 }
 
 
+int GraphWithCosts :: hamiltonian_cycle(){
+    /// return the cost of a hamiltonian cycle of min cost or -1 if there is no such cycle
+    /// this algorithm uses 2D dynamic programming where C[i][j] represents the cost of
+    /// a cycle that ends with node j and goes through all the nodes represented by 1
+    /// in the binary representation of i
+
+    const int INF = 100000005;
+    vector<vector<pair<int, int> > > rev_l(n + 1);
+    int pow = 1 << n;
+    vector<vector<int> > c(pow, vector<int>(n, INF));   /// the matrix will have 1 << n lines and n columns
+    int sol;
+
+    c[1][0] = 0;    /// we start from a cycle composed of one random node (in this case 0)
+
+    for(int i = 0; i < n; i ++)
+        for(auto node : l[i])
+            rev_l[node.first].push_back(make_pair(i, node.second));
+
+
+    for (int i = 0; i < pow; ++i) /// iterate through all cycles
+		for (int j = 0; j < n; ++j)
+			if (i & (1<<j)) /// if node j is  in the cycle
+				for (int k = 0; k < (int)rev_l[j].size(); ++k){
+					if (i & (1<<rev_l[j][k].first))
+                        c[i][j] = min(c[i][j], c[i & ~(1<<j)][rev_l[j][k].first] + rev_l[j][k].second);
+				}
+
+    sol = INF;
+	for (int i = 0; i < (int)rev_l[0].size(); ++i)
+		sol = min(sol, c[(1<<n) - 1][rev_l[0][i].first] + rev_l[0][i].second);
+
+    return sol != INF ? sol : -1;
+}
+
+
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -1429,6 +1465,18 @@ int Network :: maxflow(int s, int d) const{
 
 int main()
 {
-    Graph::hopcroft_karp("cuplaj.in", "cuplaj.out");
+    ofstream fout("hamilton.out");
+    GraphWithCosts g(0, 0, 1);
+    g.read_from_file("hamilton.in");
+
+    int sol = g.hamiltonian_cycle();
+
+    if(sol == -1)
+        fout<<"Nu exista solutie";
+    else
+        fout<<sol;
+
+
+
     return 0;
 }
