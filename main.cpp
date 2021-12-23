@@ -90,6 +90,7 @@ vector<vector<int> > Graph :: get_adjacency_matrix() const {
     return m;
 }
 
+
 /// operators
 Graph& Graph :: operator= (const Graph &g){
      if(this != &g){
@@ -312,7 +313,7 @@ vector<int> Graph :: eulerian_cycle(){
     /// method that finds eulerian cycle in the given graph
     /// this method returns the cycles as a vector or
     /// a vector with one element (-1) is there is no such cycle
-
+    vector<vector<int> > copy_l = l;
     vector<int> deg(n + 1);             /// deg[i] = degree of node i
     map <pair<int, int>, bool> h; /// h m
 
@@ -357,7 +358,7 @@ vector<int> Graph :: eulerian_cycle(){
     for(auto nodes_list : l)
         if(!nodes_list.empty())
             return vector<int>(1, -1); /// if there are edges left in the graph -> we don t have eulerian cycle
-
+    l = copy_l;
     return res;
 }
 
@@ -465,8 +466,8 @@ public:
     vector<pair<int, int> > bridges() const;
     vector<vector<int> > biconex() const;
     bool havel_hakimi(const vector<int> v);
-    int tree_diameter();
-    void euler_infoarena(string, string);
+    int tree_diameter() const;
+    void euler_infoarena(string, string) const;
 
 private:
     void h_merge(vector<pair<int, int> > &, const int ) const;
@@ -609,7 +610,7 @@ void UnorientedGraph :: h_merge (vector<pair<int, int> > &d, const int k) const 
 }
 
 bool UnorientedGraph :: havel_hakimi(vector<int> v){
-    ///this method receives a vector of integers
+    /// this method receives a vector of integers
     /// as parameters and returns true if there is a graph
     /// with the given integers as degrees or false otherwise
     /// if it returns true, *this will be the graph formed
@@ -708,7 +709,10 @@ vector<vector<int> > UnorientedGraph :: biconex() const {
     return comp;
 }
 
-int UnorientedGraph :: tree_diameter(){
+int UnorientedGraph :: tree_diameter() const {
+    /// if this method is called on an UnorientedGraph
+    /// that is a tree it will return the tree's diameter
+
     int node = 1;
     int maxi = 0;
 
@@ -727,6 +731,69 @@ int UnorientedGraph :: tree_diameter(){
             maxi = dist[i];
     return maxi;
 
+}
+
+void UnorientedGraph :: euler_infoarena(string input_file, string output_file) const{
+
+    ifstream fin(input_file);
+    ofstream fout(output_file);
+    int n, m;
+    fin>>n>>m;
+
+    vector <pair<int, int> > graph[n + 1]; /// the elements will be pair of (y, idx) where y is the other node of the edge and idx is index of the edge
+    vector<bool> eliminated(m + 1, 0);
+    stack<int> s;
+    vector<int> cycle;
+
+    for(int i = 1; i <= m; ++i){
+        int x, y;
+        fin>>x>>y;
+        graph[x].push_back(make_pair(y, i));
+        graph[y].push_back(make_pair(x, i));
+    }
+
+    fin.close();
+
+    for(int i = 1; i <= n; ++i)
+        if(graph[i].size() & 1){
+                cout<<i<<" ";
+            fout << -1;
+            fout.close();
+            return;
+        }
+
+    s.push(1);
+    while(!s.empty()){ /// just like in euler_cycle but the graph is represented differently
+        int node = s.top();
+
+        if(graph[node].empty()){
+            s.pop();
+            cycle.push_back(node);
+        }
+        else{
+            auto edge = graph[node].back();
+            graph[node].pop_back();
+
+            int next = edge.first;
+            int idx = edge.second;
+
+            if(!eliminated[idx]) /// if the edge wasn t used before
+            {
+                s.push(next);
+                eliminated[idx] = 1;
+            }
+        }
+    }
+
+    for(int i = 1; i <= n; i ++)
+        if(eliminated[i] == 0){
+            fout<<-1;
+            fout.close();
+        }
+
+    for(int i = 0; i < cycle.size() - 1; ++i)
+        fout<<cycle[i] << " ";
+    fout.close();
 }
 
 
@@ -900,9 +967,6 @@ class GraphWithCosts : public Graph {
     vector<vector<int> > matrix;       /// matrix of adjacency that will be used only for roy_floyd
     bool isOriented;
 
-private:
-    //vector<Edge> edges; /// list of edges
-
 public:
     GraphWithCosts(int n = 1, int m = 0, bool o = 0);
     GraphWithCosts(const GraphWithCosts &);
@@ -912,18 +976,18 @@ public:
     vector<int> dijkstra(const int) const;
     vector<int> bellman_ford(const int) const;
     void kruskal(const string) const;
+    vector<vector<int> > roy_floyd();
+    int hamiltonian_cycle() const;
 
     void generate_matrix();
     void read_matrix_from_file(string);
     void erase_matrix();
-    vector<vector<int> > roy_floyd();
-    int hamiltonian_cycle();
-
 
 private:
     istream& read(istream&) override;
     virtual ostream& print(ostream&) const override;
     vector<tuple<int, int, int> > get_list_of_edges() const;
+
 
 };
 
@@ -938,7 +1002,6 @@ GraphWithCosts :: GraphWithCosts(const GraphWithCosts &g) {
     this->m = g.m;
     this->isOriented = g.isOriented;
     l = g.l;
-    //edges = g.edges;
 }
 
 
@@ -1009,6 +1072,20 @@ void GraphWithCosts :: read_from_file(string filename) {
 
 }
 
+void GraphWithCosts :: read_matrix_from_file (string filename) {
+
+    ifstream input;
+    input.open(filename);
+
+    input>>n;
+    matrix = vector<vector<int> >(n, vector<int>(n, 0));
+
+    for(int i = 0; i < n; i++)
+        for(int j = 0; j < n; j++)
+            input>>matrix[i][j];
+
+
+}
 
 /// methods
 ostream& GraphWithCosts :: print(ostream& out) const {
@@ -1105,6 +1182,9 @@ vector<int> GraphWithCosts :: bellman_ford(const int s) const {
 }
 
 vector<tuple<int, int, int> > GraphWithCosts :: get_list_of_edges() const {
+    /// this method returns a vector with all the edges in the graph
+    /// the elements are of (x, y, z) where there is an edge from x to y
+    /// with cost z - used in kruskal
 
     vector<tuple<int, int, int> > edges;
 
@@ -1138,9 +1218,6 @@ void GraphWithCosts :: kruskal (const string output_file) const {
 
     sort(edges.begin(), edges.end());
 
-    //for(auto t : edges)
-      // cout<<get<0>(t)<<" "<<get<1>(t)<<" "<<get<2>(t)<<"\n";
-
     for(int i = 0; i < m && (int)sol.size() < n - 1; ++i){
         int x, y;
 
@@ -1164,6 +1241,9 @@ void GraphWithCosts :: kruskal (const string output_file) const {
 }
 
 void GraphWithCosts :: generate_matrix () {
+     /// generates matrix of adjacency from a graph
+     /// with a list of adjacency
+
      matrix = vector<vector<int> >(n, vector<int>(n, 0));
 
     for(int i = 1; i <= n; i++)
@@ -1173,22 +1253,8 @@ void GraphWithCosts :: generate_matrix () {
 
 }
 
-void GraphWithCosts :: read_matrix_from_file (string filename) {
-
-    ifstream input;
-    input.open(filename);
-
-    input>>n;
-    matrix = vector<vector<int> >(n, vector<int>(n, 0));
-
-    for(int i = 0; i < n; i++)
-        for(int j = 0; j < n; j++)
-            input>>matrix[i][j];
-
-
-}
-
 void GraphWithCosts :: erase_matrix () {
+    /// method that clears the matrix of adjacency
     matrix.clear();
     matrix.resize(0);
 }
@@ -1223,8 +1289,7 @@ vector<vector<int> > GraphWithCosts :: roy_floyd () {
     return dist;
 }
 
-
-int GraphWithCosts :: hamiltonian_cycle(){
+int GraphWithCosts :: hamiltonian_cycle() const {
     /// return the cost of a hamiltonian cycle of min cost or -1 if there is no such cycle
     /// this algorithm uses 2D dynamic programming where C[i][j] represents the cost of
     /// a cycle that ends with node j and goes through all the nodes represented by 1
@@ -1377,7 +1442,6 @@ bool Network :: bfs_with_flow(const int s, const int d, vector<int>& parent, vec
     /// the function returns the flow of the path and
     /// parent vector holds the bfs tree
 
-    //fill(parent.begin(), parent.end(), 0); /// reinitialize the parent vector
     parent[s] = -1;
     parent[d] = 0;
 
